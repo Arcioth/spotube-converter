@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spotube-converter"
+version = "0.1.0"
+description = "A CLI tool to convert Spotify CSV playlists to YouTube Music playlists"
+authors = [
+    { name = "spotube-converter", email = "author@example.com" }
+]
+requires-python = ">=3.9"
+dependencies = [
+    "ytmusicapi>=1.5.0",
+    "pandas>=2.0.0"
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.scripts]
+spotube-converter = "spotube_converter.cli:main"
