@@ -53,9 +53,24 @@ def setup_auth():
             sys.exit(1)
             
         print("\nStarting authentication process...")
-        import subprocess
-        ytmusicapi_bin = os.path.join(os.path.dirname(sys.executable), "ytmusicapi")
-        subprocess.run([ytmusicapi_bin, "oauth", "--file", str(OAUTH_FILE), "--client-id", client_id, "--client-secret", client_secret], check=True)
+        
+        # Monkey-patch ytmusicapi to fix the 'refresh_token_expires_in' bug
+        import ytmusicapi.auth.oauth.token
+        original_init = ytmusicapi.auth.oauth.token.RefreshingToken.__init__
+        
+        def patched_init(self, *args, **kwargs):
+            kwargs.pop('refresh_token_expires_in', None)
+            original_init(self, *args, **kwargs)
+            
+        ytmusicapi.auth.oauth.token.RefreshingToken.__init__ = patched_init
+        
+        from ytmusicapi.setup import setup_oauth
+        setup_oauth(
+            client_id=client_id,
+            client_secret=client_secret,
+            filepath=str(OAUTH_FILE),
+            open_browser=True
+        )
         print(f"\nAuthentication successful. Credentials saved to {OAUTH_FILE}")
     except json.JSONDecodeError:
         print("Error: The provided file is not a valid JSON file.")
