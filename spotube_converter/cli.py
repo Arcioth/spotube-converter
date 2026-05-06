@@ -28,7 +28,7 @@ def setup_auth():
     print("2. Select 'User data' and click 'Next'.")
     print("3. Fill in the App Information (names/emails can be anything, app icon is not needed) and click 'Save and Continue'.")
     print("4. Skip 'Scopes' by just clicking 'Save and Continue'.")
-    print("5. In 'OAuth Client ID', select 'Desktop app' as Application type and click 'Create'.")
+    print("5. In 'OAuth Client ID', select 'TVs and Limited Input devices' as Application type and click 'Create'.")
     print("6. Under 'Your Credentials', click 'Download' to save the JSON file to your computer.")
     print("================================================================\n")
     
