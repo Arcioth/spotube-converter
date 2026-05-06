@@ -10,10 +10,11 @@ from ytmusicapi import YTMusic
 
 CONFIG_DIR = Path.home() / ".config" / "spotube-converter"
 OAUTH_FILE = CONFIG_DIR / "oauth.json"
+CLIENT_FILE = CONFIG_DIR / "client.json"
 
 def setup_auth():
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    if OAUTH_FILE.exists():
+    if OAUTH_FILE.exists() and CLIENT_FILE.exists():
         print(f"Already authenticated. Credentials found at {OAUTH_FILE}")
         return
     
@@ -52,6 +53,10 @@ def setup_auth():
             print("Error: The provided JSON file does not contain a valid client_id or client_secret.")
             sys.exit(1)
             
+        # Save client config
+        with open(CLIENT_FILE, 'w') as f:
+            json.dump({'client_id': client_id, 'client_secret': client_secret}, f)
+            
         print("\nStarting authentication process...")
         
         # Monkey-patch ytmusicapi to fix the 'refresh_token_expires_in' bug
@@ -75,10 +80,6 @@ def setup_auth():
     except json.JSONDecodeError:
         print("Error: The provided file is not a valid JSON file.")
         sys.exit(1)
-    except subprocess.CalledProcessError as e:
-        print(f"\nAuthentication failed. ytmusicapi exited with code {e.returncode}")
-        print("If you see 'OAuth client failure', please ensure that the 'YouTube Data API v3' is enabled for your project.")
-        sys.exit(1)
     except Exception as e:
         print(f"\nAuthentication failed: {e}")
         sys.exit(1)
@@ -88,12 +89,18 @@ def migrate_playlist(csv_file, title):
         print(f"Error: Could not find CSV file at {csv_file}")
         sys.exit(1)
         
-    if not OAUTH_FILE.exists():
+    if not OAUTH_FILE.exists() or not CLIENT_FILE.exists():
         print("Error: Not authenticated. Please run 'spotube-converter auth' first.")
         sys.exit(1)
 
     print("Authenticating with YouTube Music...")
-    yt = YTMusic(str(OAUTH_FILE))
+    
+    with open(CLIENT_FILE, 'r') as f:
+        client_data = json.load(f)
+        
+    from ytmusicapi.auth.oauth.credentials import OAuthCredentials
+    oauth_creds = OAuthCredentials(client_data['client_id'], client_data['client_secret'])
+    yt = YTMusic(str(OAUTH_FILE), oauth_credentials=oauth_creds)
 
     df = pd.read_csv(csv_file)
     print(f"Loaded {len(df)} songs from CSV.")
