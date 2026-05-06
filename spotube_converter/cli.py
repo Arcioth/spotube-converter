@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import sys
 import time
@@ -16,14 +17,51 @@ def setup_auth():
         print(f"Already authenticated. Credentials found at {OAUTH_FILE}")
         return
     
-    print("Starting authentication process...")
+    print("================================================================")
+    print("                YouTube Music API Authentication                ")
+    print("================================================================")
+    print("To authenticate, you need to create a Google Cloud Project with")
+    print("the YouTube Data API v3 enabled and generate OAuth credentials.")
+    print("")
+    print("1. Open the following link in your browser:")
+    print("   https://console.cloud.google.com/apis/credentials/wizard?api=youtube.googleapis.com&previousPage=%252Fapis%252Fapi%252Fyoutube.googleapis.com%252Fmetrics")
+    print("2. Select 'User data' and click 'Next'.")
+    print("3. Fill in the App Information (names/emails can be anything, app icon is not needed) and click 'Save and Continue'.")
+    print("4. Skip 'Scopes' by just clicking 'Save and Continue'.")
+    print("5. In 'OAuth Client ID', select 'Desktop app' as Application type and click 'Create'.")
+    print("6. Under 'Your Credentials', click 'Download' to save the JSON file to your computer.")
+    print("================================================================\n")
+    
+    json_path = input("Enter the full path to the downloaded JSON file (e.g. ~/Downloads/client_secret_...json): ").strip()
+    
+    json_path = os.path.expanduser(json_path)
+    
+    if not os.path.exists(json_path):
+        print(f"Error: Could not find file at {json_path}")
+        sys.exit(1)
+        
     try:
+        with open(json_path, 'r') as f:
+            creds = json.load(f)
+            
+        client_id = creds.get('installed', {}).get('client_id') or creds.get('web', {}).get('client_id')
+        client_secret = creds.get('installed', {}).get('client_secret') or creds.get('web', {}).get('client_secret')
+        
+        if not client_id or not client_secret:
+            print("Error: The provided JSON file does not contain a valid client_id or client_secret.")
+            sys.exit(1)
+            
+        print("\nStarting authentication process...")
         import subprocess
         ytmusicapi_bin = os.path.join(os.path.dirname(sys.executable), "ytmusicapi")
-        subprocess.run([ytmusicapi_bin, "oauth", "--file", str(OAUTH_FILE)], check=True)
+        subprocess.run([ytmusicapi_bin, "oauth", "--file", str(OAUTH_FILE), "--client-id", client_id, "--client-secret", client_secret], check=True)
         print(f"\nAuthentication successful. Credentials saved to {OAUTH_FILE}")
+    except json.JSONDecodeError:
+        print("Error: The provided file is not a valid JSON file.")
+        sys.exit(1)
     except subprocess.CalledProcessError as e:
         print(f"\nAuthentication failed. ytmusicapi exited with code {e.returncode}")
+        print("If you see 'OAuth client failure', please ensure that the 'YouTube Data API v3' is enabled for your project.")
         sys.exit(1)
     except Exception as e:
         print(f"\nAuthentication failed: {e}")
