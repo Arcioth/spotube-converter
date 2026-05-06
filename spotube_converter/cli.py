@@ -19,7 +19,8 @@ def setup_auth():
     print("Starting authentication process...")
     try:
         import subprocess
-        subprocess.run([sys.executable, "-m", "ytmusicapi", "oauth", "--file", str(OAUTH_FILE)], check=True)
+        ytmusicapi_bin = os.path.join(os.path.dirname(sys.executable), "ytmusicapi")
+        subprocess.run([ytmusicapi_bin, "oauth", "--file", str(OAUTH_FILE)], check=True)
         print(f"\nAuthentication successful. Credentials saved to {OAUTH_FILE}")
     except subprocess.CalledProcessError as e:
         print(f"\nAuthentication failed. ytmusicapi exited with code {e.returncode}")
