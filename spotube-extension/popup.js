@@ -5,6 +5,13 @@ function log(msg, isError = false) {
     span.textContent = msg + '\n';
     logDiv.appendChild(span);
     logDiv.scrollTop = logDiv.scrollHeight;
+
+    chrome.storage.local.get(['migrationLogs'], function(result) {
+        let logs = result.migrationLogs || [];
+        logs.push({msg, isError});
+        if (logs.length > 500) logs = logs.slice(-500); // Keep last 500
+        chrome.storage.local.set({migrationLogs: logs});
+    });
 }
 
 chrome.runtime.onMessage.addListener((message) => {
@@ -13,20 +20,42 @@ chrome.runtime.onMessage.addListener((message) => {
     }
 });
 
+document.addEventListener('DOMContentLoaded', () => {
+    chrome.storage.local.get(['migrationLogs'], function(result) {
+        if (result.migrationLogs && result.migrationLogs.length > 0) {
+            document.getElementById('log').innerHTML = ''; // clear default message
+            result.migrationLogs.forEach(l => {
+                const logDiv = document.getElementById('log');
+                const span = document.createElement('span');
+                if (l.isError) span.className = 'error';
+                span.textContent = l.msg + '\n';
+                logDiv.appendChild(span);
+            });
+            const logDiv = document.getElementById('log');
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+    });
+});
+
+document.getElementById('clearLogsBtn').addEventListener('click', () => {
+    chrome.storage.local.set({migrationLogs: []});
+    document.getElementById('log').innerHTML = '<span class="info">Ready. Please ensure you have music.youtube.com open in another tab before starting.</span>\n';
+});
+
 document.getElementById('migrateBtn').addEventListener('click', async () => {
-    const csvData = document.getElementById('csvData').value.trim();
+    const fileInput = document.getElementById('csvFile');
     let titleInput = document.getElementById('playlistTitle').value.trim();
     if (!titleInput) titleInput = "Migrated Spotify Playlist";
 
-    if (!csvData) {
-        log("Please paste your CSV data first.", true);
+    if (!fileInput.files.length) {
+        log("Please select a CSV file first.", true);
         return;
     }
 
     document.getElementById('migrateBtn').disabled = true;
-    document.getElementById('log').innerHTML = ''; // clear
 
-    const text = csvData;
+    const file = fileInput.files[0];
+    const text = await file.text();
     
     // Basic CSV parsing
     const lines = text.split('\n');
@@ -78,23 +107,18 @@ document.getElementById('migrateBtn').addEventListener('click', async () => {
     log(`Successfully parsed ${songs.length} songs from CSV.`);
     log(`Connecting to YouTube Music...`);
 
-    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-        if (!tabs || !tabs[0]) {
-            log("Could not find active tab.", true);
+    chrome.tabs.query({url: "*://music.youtube.com/*"}, function(tabs) {
+        if (!tabs || tabs.length === 0) {
+            log("ERROR: Could not find an open YouTube Music tab.", true);
+            log("Please open music.youtube.com in another tab, ensure you are logged in, and try again.");
             document.getElementById('migrateBtn').disabled = false;
             return;
         }
         
-        const url = tabs[0].url;
-        if (!url.includes('music.youtube.com')) {
-            log("ERROR: You must be on music.youtube.com to run this.", true);
-            log("Please open a new tab to music.youtube.com, click the extension icon again, and retry.");
-            document.getElementById('migrateBtn').disabled = false;
-            return;
-        }
+        const targetTab = tabs[0];
 
         chrome.scripting.executeScript({
-            target: {tabId: tabs[0].id},
+            target: {tabId: targetTab.id},
             world: "MAIN",
             func: runMigration,
             args: [songs, titleInput]
