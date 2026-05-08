@@ -151,13 +151,31 @@ async function runMigration(songs, playlistTitle) {
 
         async function apiPost(endpoint, payload) {
             payload.context = context;
+            
+            // Get the authuser from ytcfg if possible, default to 0
+            const authUser = window.ytcfg.get('SESSION_INDEX') || "0";
+            const delegatedId = window.ytcfg.get('DELEGATED_SESSION_ID');
+
+            const headers = {
+                'Content-Type': 'application/json',
+                'X-Goog-AuthUser': authUser,
+                'X-Origin': 'https://music.youtube.com',
+                'X-Youtube-Client-Name': '67',
+                'X-Youtube-Client-Version': context.client.clientVersion
+            };
+
+            if (delegatedId) {
+                headers['X-Goog-PageId'] = delegatedId;
+            }
+
             const res = await fetch(`/youtubei/v1/${endpoint}?key=${apiKey}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: headers,
                 body: JSON.stringify(payload)
             });
             if (!res.ok) {
-                throw new Error(`HTTP ${res.status}`);
+                const errText = await res.text();
+                throw new Error(`HTTP ${res.status}: ${errText}`);
             }
             return res.json();
         }
