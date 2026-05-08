@@ -149,6 +149,23 @@ async function runMigration(songs, playlistTitle) {
             return;
         }
 
+        async function getAuthorizationHeader() {
+            const getCookie = (name) => {
+                const match = document.cookie.match(new RegExp('(^|;\\s*)(' + name + ')=([^;]*)'));
+                return match ? decodeURIComponent(match[3]) : '';
+            };
+            const sapisid = getCookie('SAPISID') || getCookie('__Secure-3PAPISID');
+            if (!sapisid) return '';
+            const timestamp = Math.floor(Date.now() / 1000);
+            const msg = `${timestamp} ${sapisid} https://music.youtube.com`;
+            const encoder = new TextEncoder();
+            const data = encoder.encode(msg);
+            const hashBuffer = await crypto.subtle.digest('SHA-1', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            return `SAPISIDHASH ${timestamp}_${hashHex}`;
+        }
+
         async function apiPost(endpoint, payload) {
             payload.context = context;
             
@@ -164,6 +181,11 @@ async function runMigration(songs, playlistTitle) {
                 'X-Youtube-Client-Version': context.client.clientVersion
             };
 
+            const authHeader = await getAuthorizationHeader();
+            if (authHeader) {
+                headers['Authorization'] = authHeader;
+            }
+
             if (delegatedId) {
                 headers['X-Goog-PageId'] = delegatedId;
             }
@@ -171,9 +193,12 @@ async function runMigration(songs, playlistTitle) {
             const res = await fetch(`/youtubei/v1/${endpoint}?key=${apiKey}`, {
                 method: 'POST',
                 headers: headers,
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
+                credentials: 'same-origin'
             });
             if (!res.ok) {
+                // If it fails with omit, we should probably try with cookies (same-origin)
+                // Actually, let's keep credentials: 'same-origin' as standard for YTM
                 const errText = await res.text();
                 throw new Error(`HTTP ${res.status}: ${errText}`);
             }
