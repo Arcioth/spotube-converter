@@ -51,10 +51,26 @@
     <!-- Main Tool Screen -->
     <div id="mainScreen" style="display: none;">
       <label>New Playlist Name:</label>
-      <input type="text" id="playlistTitle" placeholder="Imported Spotify Playlist" />
+      <input type="text" id="playlistTitle" placeholder="Imported Playlist" />
       
-      <label>Spotify Export (Open the CSV in a text editor and paste it here):</label>
-      <textarea id="csvData" placeholder="track,artist,album...\nSong Name,Artist Name,..."></textarea>
+      <label>Input Format:</label>
+      <select id="inputType" style="width: 100%; padding: 8px; margin-bottom: 15px; background: #212121; border: 1px solid #333333; color: white; border-radius: 4px;">
+        <option value="csv">Spotify CSV Export</option>
+        <option value="text">Plain Text List (AI Generated)</option>
+      </select>
+
+      <div id="csvInputGroup">
+        <label>Spotify Export (Open the CSV in a text editor and paste it here):</label>
+        <textarea id="csvData" placeholder="track,artist,album...\nSong Name,Artist Name,..."></textarea>
+      </div>
+
+      <div id="textInputGroup" style="display: none;">
+        <label>AI Prompt (Click to copy to clipboard):</label>
+        <textarea id="aiPrompt" readonly style="height: 60px; background: #1a1a1a; cursor: pointer; color: #88ff88;">Please extract the songs from this playlist and output them as a plain text list. Format each line exactly as: Song Name - Artist Name</textarea>
+        
+        <label>Paste the resulting list here:</label>
+        <textarea id="textData" placeholder="Song Name - Artist Name\nAnother Song - Another Artist"></textarea>
+      </div>
       
       <button id="migrateBtn">Create Playlist & Migrate</button>
       <button id="clearLogsBtn" class="secondary-btn">Clear Logs</button>

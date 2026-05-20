@@ -58,69 +58,109 @@ document.getElementById('clearLogsBtn').addEventListener('click', () => {
     document.getElementById('log').innerHTML = '<span class="info">Ready. We will automatically open YouTube Music in the background if it isn\'t already open.</span>\n';
 });
 
-document.getElementById('migrateBtn').addEventListener('click', async () => {
-    const csvData = document.getElementById('csvData').value.trim();
-    let titleInput = document.getElementById('playlistTitle').value.trim();
-    if (!titleInput) titleInput = "Imported Spotify Playlist";
+document.getElementById('inputType').addEventListener('change', (e) => {
+    if (e.target.value === 'csv') {
+        document.getElementById('csvInputGroup').style.display = 'block';
+        document.getElementById('textInputGroup').style.display = 'none';
+    } else {
+        document.getElementById('csvInputGroup').style.display = 'none';
+        document.getElementById('textInputGroup').style.display = 'block';
+    }
+});
 
-    if (!csvData) {
+document.getElementById('aiPrompt').addEventListener('click', (e) => {
+    e.target.select();
+    navigator.clipboard.writeText(e.target.value).then(() => {
+        log("Prompt copied to clipboard!");
+    });
+});
+
+document.getElementById('migrateBtn').addEventListener('click', async () => {
+    const inputType = document.getElementById('inputType').value;
+    const csvData = document.getElementById('csvData').value.trim();
+    const textData = document.getElementById('textData').value.trim();
+    
+    let titleInput = document.getElementById('playlistTitle').value.trim();
+    if (!titleInput) titleInput = "Imported Playlist";
+
+    if (inputType === 'csv' && !csvData) {
         log("Please paste your CSV data first.", true);
+        return;
+    }
+    if (inputType === 'text' && !textData) {
+        log("Please paste your text list first.", true);
         return;
     }
 
     const btn = document.getElementById('migrateBtn');
     btn.disabled = true;
 
-    const text = csvData;
-    
-    // Basic CSV parsing
-    const lines = text.split('\n');
-    if (lines.length < 2) {
-        log("CSV data seems empty or invalid.", true);
-        btn.disabled = false;
-        return;
-    }
-
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
-    let nameIdx = headers.findIndex(h => h.includes('name') || h.includes('track') || h.includes('title'));
-    let artistIdx = headers.findIndex(h => h.includes('artist'));
-    
-    if (nameIdx === -1 || artistIdx === -1) {
-        log("Could not find 'name' and 'artist' columns in CSV. Found: " + headers.join(', '), true);
-        btn.disabled = false;
-        return;
-    }
-
     const songs = [];
-    for (let i = 1; i < lines.length; i++) {
-        if (!lines[i].trim()) continue;
+
+    if (inputType === 'csv') {
+        const lines = csvData.split('\n');
+        if (lines.length < 2) {
+            log("CSV data seems empty or invalid.", true);
+            btn.disabled = false;
+            return;
+        }
+
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+        let nameIdx = headers.findIndex(h => h.includes('name') || h.includes('track') || h.includes('title'));
+        let artistIdx = headers.findIndex(h => h.includes('artist'));
         
-        let row = [];
-        let inQuotes = false;
-        let currentWord = '';
-        for (let char of lines[i]) {
-            if (char === '"') {
-                inQuotes = !inQuotes;
-            } else if (char === ',' && !inQuotes) {
-                row.push(currentWord);
-                currentWord = '';
-            } else {
-                currentWord += char;
+        if (nameIdx === -1 || artistIdx === -1) {
+            log("Could not find 'name' and 'artist' columns in CSV. Found: " + headers.join(', '), true);
+            btn.disabled = false;
+            return;
+        }
+
+        for (let i = 1; i < lines.length; i++) {
+            if (!lines[i].trim()) continue;
+            
+            let row = [];
+            let inQuotes = false;
+            let currentWord = '';
+            for (let char of lines[i]) {
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    row.push(currentWord);
+                    currentWord = '';
+                } else {
+                    currentWord += char;
+                }
+            }
+            row.push(currentWord);
+            
+            if (row.length > Math.max(nameIdx, artistIdx)) {
+                const songName = row[nameIdx].replace(/"/g, '').trim();
+                const artistName = row[artistIdx].replace(/"/g, '').trim();
+                if (songName) {
+                    songs.push(`${songName} ${artistName}`.trim());
+                }
             }
         }
-        row.push(currentWord);
-        
-        if (row.length > Math.max(nameIdx, artistIdx)) {
-            const songName = row[nameIdx].replace(/"/g, '').trim();
-            const artistName = row[artistIdx].replace(/"/g, '').trim();
-            if (songName) {
-                songs.push(`${songName} ${artistName}`.trim());
+        log(`Successfully parsed ${songs.length} songs from CSV.`);
+    } else {
+        const lines = textData.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (line) {
+                // If it's something like "1. Song - Artist", strip the number prefix
+                const cleanLine = line.replace(/^\d+[\.\-\)]\s*/, '').trim();
+                songs.push(cleanLine);
             }
         }
+        log(`Successfully parsed ${songs.length} songs from text list.`);
+    }
+    
+    if (songs.length === 0) {
+        log("No songs found to migrate.", true);
+        btn.disabled = false;
+        return;
     }
 
-    log(`Successfully parsed ${songs.length} songs from CSV.`);
-    
     const injectAndRun = (tabId) => {
         log(`Connecting to YouTube Music...`);
         chrome.scripting.executeScript({
