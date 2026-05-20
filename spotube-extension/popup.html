@@ -3,35 +3,66 @@
 <head>
   <style>
     body { padding: 15px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #121212; color: #ffffff; }
-    h3 { margin-top: 0; margin-bottom: 15px; font-weight: 500; font-size: 24px; color: #ffffff; }
+    h3 { margin-top: 0; margin-bottom: 15px; font-weight: 600; font-size: 24px; color: #ffffff; }
+    h4 { margin-top: 0; margin-bottom: 10px; font-size: 16px; color: #ff3333; }
+    p { font-size: 13px; color: #cccccc; line-height: 1.5; margin-bottom: 15px; }
     label { display: block; margin-bottom: 5px; font-size: 14px; color: #aaaaaa; }
-    input[type="text"], input[type="file"] { width: 100%; box-sizing: border-box; padding: 10px; margin-bottom: 15px; background: #212121; border: 1px solid #333333; color: white; border-radius: 4px; font-size: 14px; }
+    input[type="text"], textarea { width: 100%; box-sizing: border-box; padding: 10px; margin-bottom: 15px; background: #212121; border: 1px solid #333333; color: white; border-radius: 4px; font-size: 14px; font-family: monospace; }
+    textarea { height: 120px; resize: vertical; }
     button { width: 100%; padding: 12px; background-color: #ffffff; color: #000000; border: none; border-radius: 20px; font-weight: 600; font-size: 14px; cursor: pointer; transition: background-color 0.2s; }
     button:hover { background-color: #dddddd; }
     button:disabled { background-color: #555555; color: #888888; cursor: not-allowed; }
-    #clearLogsBtn { margin-top: 10px; background-color: #333333; color: white; }
-    #clearLogsBtn:hover { background-color: #444444; }
-    #log { margin-top: 15px; font-size: 13px; height: 400px; overflow-y: auto; background: #000000; border: 1px solid #333333; padding: 12px; white-space: pre-wrap; border-radius: 4px; font-family: monospace; color: #00ff00; }
+    .secondary-btn { margin-top: 10px; background-color: #333333; color: white; }
+    .secondary-btn:hover { background-color: #444444; }
+    #log { margin-top: 15px; font-size: 13px; height: 350px; overflow-y: auto; background: #000000; border: 1px solid #333333; padding: 12px; white-space: pre-wrap; border-radius: 4px; font-family: monospace; color: #00ff00; }
     .error { color: #ff5555; }
     .info { color: #aaaaaa; }
-    .container { max-width: 600px; margin: 0 auto; padding-top: 20px; }
+    .container { max-width: 600px; margin: 0 auto; padding-top: 10px; }
+    
+    .security-box { background: #1e1e1e; border: 1px solid #444444; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+    .security-box ul { padding-left: 20px; font-size: 13px; color: #cccccc; }
+    .security-box li { margin-bottom: 8px; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h3>Spotube Migrator</h3>
-    
-    <label>New Playlist Name:</label>
-    <input type="text" id="playlistTitle" placeholder="Migrated Spotify Playlist" />
-    
-    <label>Spotify Export (CSV):</label>
-    <input type="file" id="csvFile" accept=".csv" />
-    
-    <button id="migrateBtn">Migrate to YouTube Music</button>
-    <button id="clearLogsBtn">Clear Logs</button>
-    
-    <div id="log"><span class="info">Ready. Please ensure you have music.youtube.com open in another tab before starting.</span>\n</div>
+    <h3>YouTube Music Playlist Creator</h3>
+
+    <!-- Consent Screen -->
+    <div id="consentScreen" style="display: none;">
+      <h4>Security & Consent Authorization</h4>
+      <p>Before proceeding, you must authorize this extension to run locally in your browser.</p>
+      
+      <div class="security-box">
+        <b>How this keeps you safe:</b>
+        <ul>
+          <li><b>No External Servers:</b> This extension runs 100% locally on your machine. Your data is NEVER sent to any 3rd-party servers, databases, or analytics.</li>
+          <li><b>INNERTUBE_API_KEY & SAPISIDHASH:</b> YouTube requires these internal tokens to create playlists. This extension securely reads them from your active YouTube Music tab in memory and immediately uses them to construct the payload for YouTube. They never leave your browser context.</li>
+          <li><b>Permissions Justification:</b> 
+            <br/>• <i>Tabs & Scripting</i>: To open a background YouTube Music tab and securely inject the local migration script.
+            <br/>• <i>Storage</i>: To save your log history and this consent agreement.
+          </li>
+        </ul>
+      </div>
+
+      <button id="agreeBtn">I Understand & Agree</button>
+    </div>
+
+    <!-- Main Tool Screen -->
+    <div id="mainScreen" style="display: none;">
+      <label>New Playlist Name:</label>
+      <input type="text" id="playlistTitle" placeholder="Imported Spotify Playlist" />
+      
+      <label>Spotify Export (Open the CSV in a text editor and paste it here):</label>
+      <textarea id="csvData" placeholder="track,artist,album...\nSong Name,Artist Name,..."></textarea>
+      
+      <button id="migrateBtn">Create Playlist & Migrate</button>
+      <button id="clearLogsBtn" class="secondary-btn">Clear Logs</button>
+      
+      <div id="log"><span class="info">Ready. We will automatically open YouTube Music in the background if it isn't already open.</span>\n</div>
+    </div>
   </div>
+  
   <script src="popup.js"></script>
 </body>
 </html>

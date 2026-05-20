@@ -1,5 +1,6 @@
 function log(msg, isError = false) {
     const logDiv = document.getElementById('log');
+    if (!logDiv) return;
     const span = document.createElement('span');
     if (isError) span.className = 'error';
     span.textContent = msg + '\n';
@@ -16,63 +17,77 @@ function log(msg, isError = false) {
 
 chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'log') {
-        log(message.text, message.text.toLowerCase().includes('error'));
+        log(message.text, message.text.toLowerCase().includes('error') || message.text.toLowerCase().includes('fatal'));
     }
 });
 
 document.addEventListener('DOMContentLoaded', () => {
-    chrome.storage.local.get(['migrationLogs'], function(result) {
+    // Check Consent
+    chrome.storage.local.get(['hasConsented', 'migrationLogs'], function(result) {
+        if (result.hasConsented) {
+            document.getElementById('consentScreen').style.display = 'none';
+            document.getElementById('mainScreen').style.display = 'block';
+        } else {
+            document.getElementById('consentScreen').style.display = 'block';
+            document.getElementById('mainScreen').style.display = 'none';
+        }
+
+        // Load Logs
         if (result.migrationLogs && result.migrationLogs.length > 0) {
-            document.getElementById('log').innerHTML = ''; // clear default message
+            const logDiv = document.getElementById('log');
+            logDiv.innerHTML = ''; // clear default message
             result.migrationLogs.forEach(l => {
-                const logDiv = document.getElementById('log');
                 const span = document.createElement('span');
                 if (l.isError) span.className = 'error';
                 span.textContent = l.msg + '\n';
                 logDiv.appendChild(span);
             });
-            const logDiv = document.getElementById('log');
             logDiv.scrollTop = logDiv.scrollHeight;
         }
     });
 });
 
+document.getElementById('agreeBtn').addEventListener('click', () => {
+    chrome.storage.local.set({hasConsented: true});
+    document.getElementById('consentScreen').style.display = 'none';
+    document.getElementById('mainScreen').style.display = 'block';
+});
+
 document.getElementById('clearLogsBtn').addEventListener('click', () => {
     chrome.storage.local.set({migrationLogs: []});
-    document.getElementById('log').innerHTML = '<span class="info">Ready. Please ensure you have music.youtube.com open in another tab before starting.</span>\n';
+    document.getElementById('log').innerHTML = '<span class="info">Ready. We will automatically open YouTube Music in the background if it isn\'t already open.</span>\n';
 });
 
 document.getElementById('migrateBtn').addEventListener('click', async () => {
-    const fileInput = document.getElementById('csvFile');
+    const csvData = document.getElementById('csvData').value.trim();
     let titleInput = document.getElementById('playlistTitle').value.trim();
-    if (!titleInput) titleInput = "Migrated Spotify Playlist";
+    if (!titleInput) titleInput = "Imported Spotify Playlist";
 
-    if (!fileInput.files.length) {
-        log("Please select a CSV file first.", true);
+    if (!csvData) {
+        log("Please paste your CSV data first.", true);
         return;
     }
 
-    document.getElementById('migrateBtn').disabled = true;
+    const btn = document.getElementById('migrateBtn');
+    btn.disabled = true;
 
-    const file = fileInput.files[0];
-    const text = await file.text();
+    const text = csvData;
     
     // Basic CSV parsing
     const lines = text.split('\n');
     if (lines.length < 2) {
-        log("CSV file seems empty.", true);
-        document.getElementById('migrateBtn').disabled = false;
+        log("CSV data seems empty or invalid.", true);
+        btn.disabled = false;
         return;
     }
 
     const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
-    
     let nameIdx = headers.findIndex(h => h.includes('name') || h.includes('track') || h.includes('title'));
     let artistIdx = headers.findIndex(h => h.includes('artist'));
     
     if (nameIdx === -1 || artistIdx === -1) {
         log("Could not find 'name' and 'artist' columns in CSV. Found: " + headers.join(', '), true);
-        document.getElementById('migrateBtn').disabled = false;
+        btn.disabled = false;
         return;
     }
 
@@ -105,27 +120,38 @@ document.getElementById('migrateBtn').addEventListener('click', async () => {
     }
 
     log(`Successfully parsed ${songs.length} songs from CSV.`);
-    log(`Connecting to YouTube Music...`);
-
-    chrome.tabs.query({url: "*://music.youtube.com/*"}, function(tabs) {
-        if (!tabs || tabs.length === 0) {
-            log("ERROR: Could not find an open YouTube Music tab.", true);
-            log("Please open music.youtube.com in another tab, ensure you are logged in, and try again.");
-            document.getElementById('migrateBtn').disabled = false;
-            return;
-        }
-        
-        const targetTab = tabs[0];
-
+    
+    const injectAndRun = (tabId) => {
+        log(`Connecting to YouTube Music...`);
         chrome.scripting.executeScript({
-            target: {tabId: targetTab.id},
+            target: {tabId: tabId},
             world: "MAIN",
             func: runMigration,
             args: [songs, titleInput]
         }).catch(err => {
             log(`Script injection failed: ${err.message}`, true);
-            document.getElementById('migrateBtn').disabled = false;
+            btn.disabled = false;
         });
+    };
+
+    chrome.tabs.query({url: "*://music.youtube.com/*"}, function(tabs) {
+        if (!tabs || tabs.length === 0) {
+            log("YouTube Music is not open. Opening it in the background now...");
+            // Create tab but keep focus on the extension tab
+            chrome.tabs.create({url: "https://music.youtube.com", active: false}, (newTab) => {
+                log("Waiting for YouTube Music to load (this may take a few seconds)...");
+                
+                const listener = function(tabId, info) {
+                    if (tabId === newTab.id && info.status === 'complete') {
+                        chrome.tabs.onUpdated.removeListener(listener);
+                        injectAndRun(newTab.id);
+                    }
+                };
+                chrome.tabs.onUpdated.addListener(listener);
+            });
+        } else {
+            injectAndRun(tabs[0].id);
+        }
     });
 });
 
@@ -136,8 +162,15 @@ async function runMigration(songs, playlistTitle) {
     };
 
     try {
+        // Wait for ytcfg to be populated if the tab was just opened
+        let retries = 0;
+        while (!window.ytcfg && retries < 10) {
+            await new Promise(r => setTimeout(r, 1000));
+            retries++;
+        }
+
         if (!window.ytcfg) {
-            sendLog("Error: window.ytcfg not found. Make sure the page is fully loaded and you are logged in.");
+            sendLog("Error: window.ytcfg not found. Make sure the YouTube Music page is fully loaded and you are logged in.");
             return;
         }
 
@@ -145,7 +178,7 @@ async function runMigration(songs, playlistTitle) {
         const context = window.ytcfg.get('INNERTUBE_CONTEXT');
 
         if (!apiKey || !context) {
-            sendLog("Error: API Key or Context not found. Are you logged in?");
+            sendLog("Error: API Key or Context not found. You must be logged into YouTube Music.");
             return;
         }
 
@@ -169,7 +202,6 @@ async function runMigration(songs, playlistTitle) {
         async function apiPost(endpoint, payload) {
             payload.context = context;
             
-            // Get the authuser from ytcfg if possible, default to 0
             const authUser = window.ytcfg.get('SESSION_INDEX') || "0";
             const delegatedId = window.ytcfg.get('DELEGATED_SESSION_ID');
 
@@ -196,9 +228,8 @@ async function runMigration(songs, playlistTitle) {
                 body: JSON.stringify(payload),
                 credentials: 'same-origin'
             });
+            
             if (!res.ok) {
-                // If it fails with omit, we should probably try with cookies (same-origin)
-                // Actually, let's keep credentials: 'same-origin' as standard for YTM
                 const errText = await res.text();
                 throw new Error(`HTTP ${res.status}: ${errText}`);
             }
@@ -208,7 +239,7 @@ async function runMigration(songs, playlistTitle) {
         sendLog(`Creating playlist: "${playlistTitle}"...`);
         const createRes = await apiPost('playlist/create', {
             title: playlistTitle,
-            description: "Migrated via Spotube Browser Extension",
+            description: "Migrated via YouTube Music Playlist Creator",
             privacyStatus: "PRIVATE"
         });
 
@@ -234,7 +265,6 @@ async function runMigration(songs, playlistTitle) {
                 
                 let foundId = null;
                 const jsonStr = JSON.stringify(searchRes);
-                // Look for the first videoId
                 const match = jsonStr.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
                 if (match && match[1]) {
                     foundId = match[1];

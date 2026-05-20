@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Spotube Migrator",
-  "version": "1.0",
-  "description": "Migrate Spotify CSV playlists to YouTube Music directly from the browser.",
+  "name": "YouTube Music Playlist Creator",
+  "version": "2.0",
+  "description": "Create YouTube Music playlists from CSV files directly in your browser. Fully local and secure.",
   "action": {},
   "background": {
     "service_worker": "background.js"
@@ -14,11 +14,5 @@
   ],
   "host_permissions": [
     "*://music.youtube.com/*"
-  ],
-  "content_scripts": [
-    {
-      "matches": ["*://music.youtube.com/*"],
-      "js": ["content.js"]
-    }
   ]
 }
