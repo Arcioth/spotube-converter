@@ -1,9 +1,22 @@
 {
   "manifest_version": 3,
-  "name": "YouTube Music Playlist Creator",
+  "name": "Spotube: YouTube Music Playlist Creator",
   "version": "2.0",
-  "description": "Create YouTube Music playlists from CSV files directly in your browser. Fully local and secure.",
-  "action": {},
+  "description": "Securely migrate Spotify CSV playlists or AI-generated lists to YouTube Music.",
+  "action": {
+    "default_icon": {
+      "16": "assets/icon16.png",
+      "32": "assets/icon32.png",
+      "48": "assets/icon48.png",
+      "128": "assets/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "assets/icon16.png",
+    "32": "assets/icon32.png",
+    "48": "assets/icon48.png",
+    "128": "assets/icon128.png"
+  },
   "background": {
     "service_worker": "background.js"
   },
